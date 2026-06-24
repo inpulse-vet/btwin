@@ -1,0 +1,18 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "vcpkg",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "VCPKG_CRT_LINKAGE": "dynamic",
+        "VCPKG_LIBRARY_LINKAGE": "dynamic",
+        "VCPKG_CMAKE_SYSTEM_NAME": "MinGW",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
+      }
+    }
+  ]
+}
