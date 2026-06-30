@@ -81,10 +81,10 @@ jobs:
           Copy-Item build/Release/watcher.dll, build/Release/watcher.lib -Destination "$stage/release/"
           Copy-Item build/Debug/watcher.dll, build/Debug/watcher.lib, build/Debug/watcher.pdb -Destination "$stage/debug/"
           Copy-Item src/watcher.h -Destination "$stage/"
-          Compress-Archive -Path "$stage/*" -DestinationPath "watcher-${{ matrix.arch }}.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath "watcher-${{ github.ref_name }}-${{ matrix.arch }}.zip"
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: watcher-${{ matrix.arch }}.zip
+          files: watcher-${{ github.ref_name }}-${{ matrix.arch }}.zip
