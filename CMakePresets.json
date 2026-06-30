@@ -1,18 +1,37 @@
 {
-  "version": 3,
-  "configurePresets": [
-    {
-      "name": "vcpkg",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "toolchainFile": "vcpkg/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "VCPKG_CRT_LINKAGE": "dynamic",
-        "VCPKG_LIBRARY_LINKAGE": "dynamic",
-        "VCPKG_CMAKE_SYSTEM_NAME": "MinGW",
-        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
-      }
-    }
-  ]
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "vcpkg",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_CRT_LINKAGE": "dynamic",
+                "VCPKG_LIBRARY_LINKAGE": "dynamic",
+                "VCPKG_CMAKE_SYSTEM_NAME": "MinGW",
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
+            }
+        },
+        {
+            "name": "windows-x64",
+            "displayName": "Ferramentas de Build do Visual Studio 2026 Release - amd64",
+            "description": "Using compilers for Visual Studio 18 2026 (x64 architecture)",
+            "generator": "Visual Studio 18 2026",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-x64-debug",
+            "displayName": "Ferramentas de Build do Visual Studio 2026 Release - amd64 - Debug",
+            "configurePreset": "windows-x64",
+            "configuration": "Debug"
+        }
+    ]
 }
