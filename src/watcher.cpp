@@ -201,7 +201,7 @@ watcher_t watcher_alloc(const watcher_params_t* params, void* user_data) {
 
 void watcher_free(watcher_t watcher) {
     const auto watcher_ptr = static_cast<BtWatcher *>(watcher);
-    free(watcher_ptr);
+    delete watcher_ptr;
 }
 
 int watcher_start(watcher_t watcher) {
