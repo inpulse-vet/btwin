@@ -14,14 +14,16 @@ typedef enum {
     BT_LE,
 } bt_standard_t;
 
+#define BT_NAME_MAX 248   // Bluetooth GAP maximum device-name length, in octets
+
 typedef struct {
     uint32_t name_len;
-    char name[128];
+    char name[BT_NAME_MAX];
     char mac[18];
     bt_standard_t standard;
 } bt_device_t;
 
-typedef void (*bt_device_callback_t)(bt_device_t device, void *user_data);
+typedef void (*bt_device_callback_t)(const bt_device_t *device, void *user_data);
 
 typedef void (*on_end_t)(void *user_data);
 

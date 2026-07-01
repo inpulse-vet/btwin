@@ -150,14 +150,13 @@ struct BtWatcher {
 
             bt_device_t device = {};
             mac.copy(device.mac, sizeof(device.mac));
-            device_name.copy(device.name, sizeof(device.name));
-            device.name_len = device_name.length();
+            device.name_len = static_cast<uint32_t>(device_name.copy(device.name, sizeof(device.name)));
             device.standard = standard;
 
             bt_log(BT_LOG_INFO, "device added: {} {} (standard {})", mac, device_name, static_cast<int>(standard));
 
             if (this->on_device) {
-                this->on_device(device, this->user_data);
+                this->on_device(&device, this->user_data);
             }
         });
 
