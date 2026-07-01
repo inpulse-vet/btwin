@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <string>
 #include <algorithm>
+#include <thread>
 
 #define WINDOWS_LEAN_AND_MEAN
 #include <windows.h>
@@ -220,31 +221,38 @@ void btwin_join(btwin_t watcher) {
     w->cond.wait(l);
 }
 
-// Initialize a COM apartment only if the calling thread doesn't already have one.
-// If the thread is already in an apartment (any mode), reuse it rather than forcing
-// multi_threaded, which would throw RPC_E_CHANGED_MODE for an existing STA.
-static void ensure_apartment() {
-    APTTYPE type;
-    APTTYPEQUALIFIER qualifier;
-    if (CoGetApartmentType(&type, &qualifier) == CO_E_NOTINITIALIZED) {
+// Run a WinRT query on a dedicated worker thread that owns its own MTA, so the
+// result is correct regardless of the caller's apartment and the caller's thread
+// is never mutated. A fresh thread has no apartment, so init_apartment cannot throw
+// RPC_E_CHANGED_MODE; it is kept outside the try so uninit_apartment only runs after
+// a successful init. join() is an ordinary thread join (not a WinRT .get()), so it is
+// legal even from an STA caller and cannot deadlock.
+template <typename F>
+static int run_on_mta_thread(F &&query, int on_error) {
+    int result = on_error;
+    std::thread t([&]() {
         winrt::init_apartment(winrt::apartment_type::multi_threaded);
-    }
+        try {
+            result = query();
+        } catch (const winrt::hresult_error &e) {
+            log("adapter query error: {}", winrt::to_string(e.message()));
+            result = on_error;
+        }
+        winrt::uninit_apartment();
+    });
+    t.join();
+    return result;
 }
 
 int btwin_adapter_exists() {
-    try {
-        ensure_apartment();
+    return run_on_mta_thread([] {
         auto adapter = Devices::Bluetooth::BluetoothAdapter::GetDefaultAsync().get();
         return adapter != nullptr ? 1 : 0;
-    } catch (const winrt::hresult_error &e) {
-        log("btwin_adapter_exists error: {}", winrt::to_string(e.message()));
-        return 0;
-    }
+    }, 0);
 }
 
 int btwin_adapter_is_on() {
-    try {
-        ensure_apartment();
+    return run_on_mta_thread([] {
         auto adapter = Devices::Bluetooth::BluetoothAdapter::GetDefaultAsync().get();
         if (adapter == nullptr) {
             return -1;
@@ -254,10 +262,7 @@ int btwin_adapter_is_on() {
             return -1;
         }
         return radio.State() == Devices::Radios::RadioState::On ? 1 : 0;
-    } catch (const winrt::hresult_error &e) {
-        log("btwin_adapter_is_on error: {}", winrt::to_string(e.message()));
-        return -1;
-    }
+    }, -1);
 }
 
 
