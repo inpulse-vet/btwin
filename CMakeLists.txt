@@ -7,7 +7,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(cppwinrt CONFIG REQUIRED)
 
 set(LIB_SOURCES
-        src/watcher.cpp
+        src/btwin.cpp
 )
 
 
@@ -15,8 +15,8 @@ set(SOURCES
         src/main.c
 )
 
-add_library("watcher" SHARED ${LIB_SOURCES})
-target_link_libraries(watcher
+add_library("btwin" SHARED ${LIB_SOURCES})
+target_link_libraries(btwin
         PRIVATE
         fmt::fmt
         Microsoft::CppWinRT
@@ -27,5 +27,5 @@ target_link_libraries(watcher
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME}
         PRIVATE
-            "watcher"
+            "btwin"
 )

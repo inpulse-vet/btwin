@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <threads.h>
 
-#include "watcher.h"
+#include "btwin.h"
 
 static const char* bt_standard_strings[] = {
     "BT_UNKNOWN",
@@ -26,18 +26,18 @@ int main(int argc, char **argv) {
     printf("hello\n");
     // runWatcher();
 
-    const watcher_params_t params = {
+    const btwin_params_t params = {
         .callback = my_bt_device_callback,
         .on_end = my_bt_end,
     };
 
-    watcher_t watcher = watcher_alloc(&params, NULL);
+    btwin_t watcher = btwin_alloc(&params, NULL);
 
     printf("start\n");
-    watcher_start(watcher);
+    btwin_start(watcher);
 
     printf("join\n");
-    watcher_join(watcher);
+    btwin_join(watcher);
 
     // struct timespec duration = { .tv_sec = 1, .tv_nsec = 0 };
     // thrd_sleep(&duration, NULL);
@@ -47,6 +47,6 @@ int main(int argc, char **argv) {
     // thrd_sleep(&duratio2, NULL);
 
     printf("free\n");
-    watcher_free(watcher);
+    btwin_free(watcher);
     return 0;
 }

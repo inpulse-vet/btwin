@@ -1,4 +1,4 @@
-#include "watcher.h"
+#include "btwin.h"
 
 #include <chrono>
 #include <iostream>
@@ -112,7 +112,7 @@ struct BtWatcher {
     std::mutex lock{};
     std::condition_variable cond{};
 
-    explicit BtWatcher(const watcher_params_t *params, void *user_data): user_data(user_data), watcher(nullptr) {
+    explicit BtWatcher(const btwin_params_t *params, void *user_data): user_data(user_data), watcher(nullptr) {
 
         on_device = params->callback;
         on_start = params->on_start;
@@ -195,26 +195,26 @@ struct BtWatcher {
 
 };
 
-watcher_t watcher_alloc(const watcher_params_t* params, void* user_data) {
+btwin_t btwin_alloc(const btwin_params_t* params, void* user_data) {
     return new BtWatcher(params, user_data);
 }
 
-void watcher_free(watcher_t watcher) {
+void btwin_free(btwin_t watcher) {
     const auto watcher_ptr = static_cast<BtWatcher *>(watcher);
     delete watcher_ptr;
 }
 
-int watcher_start(watcher_t watcher) {
+int btwin_start(btwin_t watcher) {
     const auto w = static_cast<BtWatcher*>(watcher);
     return w->start();
 }
 
-int watcher_stop(watcher_t watcher) {
+int btwin_stop(btwin_t watcher) {
     const auto w = static_cast<BtWatcher*>(watcher);
     return w->stop();
 }
 
-void watcher_join(watcher_t watcher) {
+void btwin_join(btwin_t watcher) {
     const auto w = static_cast<BtWatcher*>(watcher);
     auto l = std::unique_lock(w->lock);
     w->cond.wait(l);

@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define WATCHER_EXPORT __declspec(dllexport)
+#define BTWIN_EXPORT __declspec(dllexport)
 
 typedef enum {
     BT_UNKNOWN,
@@ -31,23 +31,23 @@ typedef struct {
     bt_device_callback_t callback;
     on_start_t on_start;
     on_end_t on_end;
-} watcher_params_t;
+} btwin_params_t;
 
-typedef void *watcher_t;
+typedef void *btwin_t;
 
-WATCHER_EXPORT watcher_t watcher_alloc(const watcher_params_t *params, void* user_data);
+BTWIN_EXPORT btwin_t btwin_alloc(const btwin_params_t *params, void* user_data);
 
-WATCHER_EXPORT void watcher_free(watcher_t watcher);
+BTWIN_EXPORT void btwin_free(btwin_t watcher);
 
-WATCHER_EXPORT int watcher_start(watcher_t watcher);
+BTWIN_EXPORT int btwin_start(btwin_t watcher);
 
-WATCHER_EXPORT int watcher_stop(watcher_t watcher);
+BTWIN_EXPORT int btwin_stop(btwin_t watcher);
 
-WATCHER_EXPORT void watcher_join(watcher_t watcher);
+BTWIN_EXPORT void btwin_join(btwin_t watcher);
 
-WATCHER_EXPORT int runWatcher();
+BTWIN_EXPORT int runWatcher();
 
-WATCHER_EXPORT int runBtTest();
+BTWIN_EXPORT int runBtTest();
 
 #ifdef __cplusplus
 }

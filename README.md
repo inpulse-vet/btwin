@@ -4,17 +4,17 @@ Scan for nearby Bluetooth devices on Windows, exposed through a small C ABI.
 
 `btwin` enumerates nearby Bluetooth Classic and Low Energy devices and reports each one — name, MAC
 address, and radio standard — through a handful of `extern "C"` functions. All the Windows-specific
-machinery (C++/WinRT, `DeviceWatcher`) lives behind a shared library, `watcher.dll`, so callers only
+machinery (C++/WinRT, `DeviceWatcher`) lives behind a shared library, `btwin.dll`, so callers only
 have to deal with plain C.
 
 ## Overview
 
 The implementation is deliberately split across a C/C++ boundary:
 
-- **`watcher.dll`** (built from `src/watcher.cpp`) is C++/WinRT. It creates a
+- **`btwin.dll`** (built from `src/btwin.cpp`) is C++/WinRT. It creates a
   `DeviceWatcher` with an AQS filter on the Bluetooth Classic and LE `ProtocolId` GUIDs, and maps
-  every device it finds into a plain [`bt_device_t`](src/watcher.h).
-- **Callers stay in C** and depend only on `src/watcher.h`. The `watcher_t` handle is opaque, and no
+  every device it finds into a plain [`bt_device_t`](src/btwin.h).
+- **Callers stay in C** and depend only on `src/btwin.h`. The `btwin_t` handle is opaque, and no
   WinRT types ever cross the boundary.
 
 Each device's radio standard is determined from its `System.Devices.Aep.ProtocolId` property:
@@ -50,7 +50,7 @@ cmake --build build/windows-x64 --config Debug
 cmake --build build/windows-x64 --config Release
 ```
 
-This produces `watcher.dll` (the library) and `BTWin.exe` (the example consumer built from
+This produces `btwin.dll` (the library) and `BTWin.exe` (the example consumer built from
 `src/main.c`).
 
 > **Note:** `CMakePresets.json` also defines a `vcpkg` preset that cross-compiles from Linux with
@@ -59,12 +59,12 @@ This produces `watcher.dll` (the library) and `BTWin.exe` (the example consumer 
 
 ## Usage
 
-Link against `watcher` and include `watcher.h`. Provide callbacks via `watcher_params_t`, then drive
+Link against `btwin` and include `btwin.h`. Provide callbacks via `btwin_params_t`, then drive
 the watcher through its lifecycle:
 
 ```c
 #include <stdio.h>
-#include "watcher.h"
+#include "btwin.h"
 
 void on_device(bt_device_t device, void *user_data) {
     printf("found %.*s  mac=%s  standard=%d\n",
@@ -76,35 +76,35 @@ void on_end(void *user_data) {
 }
 
 int main(void) {
-    const watcher_params_t params = {
+    const btwin_params_t params = {
         .callback = on_device,  // invoked once per discovered device
         .on_end   = on_end,     // invoked when the initial enumeration finishes
     };
 
-    watcher_t watcher = watcher_alloc(&params, NULL);
-    watcher_start(watcher);
-    watcher_join(watcher);   // blocks until the initial scan completes
-    watcher_free(watcher);
+    btwin_t watcher = btwin_alloc(&params, NULL);
+    btwin_start(watcher);
+    btwin_join(watcher);   // blocks until the initial scan completes
+    btwin_free(watcher);
     return 0;
 }
 ```
 
-`watcher_join` does **not** wait on a timer — it blocks until the watcher's initial device
+`btwin_join` does **not** wait on a timer — it blocks until the watcher's initial device
 enumeration completes (signaled internally from the WinRT `EnumerationCompleted` callback). See
 `src/main.c` for the example consumer this snippet is adapted from.
 
 ## C ABI reference
 
-All functions are declared in [`src/watcher.h`](src/watcher.h), wrapped in `extern "C"` and marked
+All functions are declared in [`src/btwin.h`](src/btwin.h), wrapped in `extern "C"` and marked
 `__declspec(dllexport)`.
 
 | Function                                                          | Description                                                                |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `watcher_t watcher_alloc(const watcher_params_t *params, void *user_data)` | Allocate a watcher with the given callbacks and user data.        |
-| `int watcher_start(watcher_t watcher)`                            | Start enumerating Bluetooth devices.                                       |
-| `int watcher_stop(watcher_t watcher)`                             | Stop the watcher.                                                          |
-| `void watcher_join(watcher_t watcher)`                            | Block until the initial enumeration completes.                             |
-| `void watcher_free(watcher_t watcher)`                            | Destroy a watcher.                                                         |
+| `btwin_t btwin_alloc(const btwin_params_t *params, void *user_data)` | Allocate a watcher with the given callbacks and user data.        |
+| `int btwin_start(btwin_t watcher)`                               | Start enumerating Bluetooth devices.                                       |
+| `int btwin_stop(btwin_t watcher)`                                | Stop the watcher.                                                          |
+| `void btwin_join(btwin_t watcher)`                               | Block until the initial enumeration completes.                             |
+| `void btwin_free(btwin_t watcher)`                               | Destroy a watcher.                                                         |
 | `int runWatcher()`, `int runBtTest()`                             | Standalone debug experiments — not part of the normal flow.                |
 
 ### Types
@@ -131,28 +131,28 @@ typedef struct {
     bt_device_callback_t callback;   // called per discovered device
     on_start_t           on_start;
     on_end_t             on_end;      // called when enumeration completes
-} watcher_params_t;
+} btwin_params_t;
 
-typedef void *watcher_t;             // opaque handle
+typedef void *btwin_t;               // opaque handle
 ```
 
 ## Prebuilt binaries
 
 GitHub Actions (`.github/workflows/build.yml`) builds the library for **x64** and **ARM64** on every
-`v*` tag and attaches the results to the GitHub Release as `watcher-<tag>-<arch>.zip`. Each archive
+`v*` tag and attaches the results to the GitHub Release as `btwin-<tag>-<arch>.zip`. Each archive
 contains:
 
-- `release/watcher.dll`, `release/watcher.lib`
-- `debug/watcher.dll`, `debug/watcher.lib`, `debug/watcher.pdb`
-- `watcher.h`
+- `release/btwin.dll`, `release/btwin.lib`
+- `debug/btwin.dll`, `debug/btwin.lib`, `debug/btwin.pdb`
+- `btwin.h`
 
 ## Project layout
 
 | Path                   | Description                                                          |
 | ---------------------- | ------------------------------------------------------------------- |
-| `src/watcher.h`        | The C ABI surface — the only file C consumers need.                 |
-| `src/watcher.cpp`      | C++/WinRT implementation, built as the `watcher` shared library.    |
-| `src/main.c`           | Example C consumer that links `watcher`.                            |
+| `src/btwin.h`          | The C ABI surface — the only file C consumers need.                 |
+| `src/btwin.cpp`        | C++/WinRT implementation, built as the `btwin` shared library.       |
+| `src/main.c`           | Example C consumer that links `btwin`.                              |
 | `CMakeLists.txt`       | Build definition for the library and example executable.            |
 | `CMakePresets.json`    | Configure/build presets (`windows-x64` is the supported one).       |
 | `vcpkg.json`           | Dependency manifest (`fmt`, `cppwinrt`).                            |

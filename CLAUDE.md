@@ -5,16 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 `btwin` scans for nearby Bluetooth devices on Windows and reports them through a small C ABI.
-- `src/watcher.cpp` — C++/WinRT implementation. Uses `DeviceWatcher` with an AQS filter on the
+- `src/btwin.cpp` — C++/WinRT implementation. Uses `DeviceWatcher` with an AQS filter on the
   Bluetooth Classic and LE `ProtocolId` GUIDs to enumerate devices, and maps each hit into a plain
-  `bt_device_t`. Built as a **shared library** named `watcher`.
-- `src/watcher.h` — the C ABI surface. Everything is wrapped in `extern "C"` and marked
-  `__declspec(dllexport)`. `watcher_t` is an opaque handle (really a `BtWatcher*`). This is the
+  `bt_device_t`. Built as a **shared library** named `btwin`.
+- `src/btwin.h` — the C ABI surface. Everything is wrapped in `extern "C"` and marked
+  `__declspec(dllexport)`. `btwin_t` is an opaque handle (really a `BtWatcher*`). This is the
   boundary: callers stay in C, all WinRT lives behind it.
-- `src/main.c` — C executable that links `watcher`, allocates a watcher with callbacks, starts it,
-  and blocks in `watcher_join` until enumeration completes.
+- `src/main.c` — C executable that links `btwin`, allocates a watcher with callbacks, starts it,
+  and blocks in `btwin_join` until enumeration completes.
 
-The C/C++ split is deliberate: `main.c` is compiled as C and must only depend on `watcher.h`.
+The C/C++ split is deliberate: `main.c` is compiled as C and must only depend on `btwin.h`.
 
 ## Build
 
@@ -42,9 +42,9 @@ There is no test suite and no linter configured.
 
 ## Conventions / gotchas
 
-- `watcher_join` blocks on a `std::condition_variable` that is signaled from the WinRT
+- `btwin_join` blocks on a `std::condition_variable` that is signaled from the WinRT
   `EnumerationCompleted` callback — i.e. it returns once the initial device scan finishes, not on a
   timer.
-- The synchronous helpers `runWatcher()` and `runBtTest()` in `watcher.cpp` are standalone
-  experiments/debugging entry points, not part of the normal `watcher_alloc`/`start`/`join` flow.
+- The synchronous helpers `runWatcher()` and `runBtTest()` in `btwin.cpp` are standalone
+  experiments/debugging entry points, not part of the normal `btwin_alloc`/`start`/`join` flow.
 - WinRT GUIDs identify the radio standard: Classic = `{e0cbf06c-...f974}`, LE = `{bb7bb05e-...4d49}`.

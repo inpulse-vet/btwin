@@ -61,30 +61,30 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: watcher-${{ matrix.arch }}
+          name: btwin-${{ matrix.arch }}
           path: |
-            src/watcher.h
-            build/Release/watcher.dll
-            build/Release/watcher.lib
-            build/Release/watcher.pdb
-            build/Debug/watcher.dll
-            build/Debug/watcher.lib
-            build/Debug/watcher.pdb
+            src/btwin.h
+            build/Release/btwin.dll
+            build/Release/btwin.lib
+            build/Release/btwin.pdb
+            build/Debug/btwin.dll
+            build/Debug/btwin.lib
+            build/Debug/btwin.pdb
           if-no-files-found: error
 
       - name: Package release binaries
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
-          $stage = "pkg/watcher-${{ matrix.arch }}"
+          $stage = "pkg/btwin-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force -Path "$stage/release", "$stage/debug" | Out-Null
-          Copy-Item build/Release/watcher.dll, build/Release/watcher.lib -Destination "$stage/release/"
-          Copy-Item build/Debug/watcher.dll, build/Debug/watcher.lib, build/Debug/watcher.pdb -Destination "$stage/debug/"
-          Copy-Item src/watcher.h -Destination "$stage/"
-          Compress-Archive -Path "$stage/*" -DestinationPath "watcher-${{ github.ref_name }}-${{ matrix.arch }}.zip"
+          Copy-Item build/Release/btwin.dll, build/Release/btwin.lib -Destination "$stage/release/"
+          Copy-Item build/Debug/btwin.dll, build/Debug/btwin.lib, build/Debug/btwin.pdb -Destination "$stage/debug/"
+          Copy-Item src/btwin.h -Destination "$stage/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "btwin-${{ github.ref_name }}-${{ matrix.arch }}.zip"
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: watcher-${{ github.ref_name }}-${{ matrix.arch }}.zip
+          files: btwin-${{ github.ref_name }}-${{ matrix.arch }}.zip
