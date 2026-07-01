@@ -105,7 +105,6 @@ All functions are declared in [`src/btwin.h`](src/btwin.h), wrapped in `extern "
 | `int btwin_stop(btwin_t watcher)`                                | Stop the watcher.                                                          |
 | `void btwin_join(btwin_t watcher)`                               | Block until the initial enumeration completes.                             |
 | `void btwin_free(btwin_t watcher)`                               | Destroy a watcher.                                                         |
-| `int runWatcher()`, `int runBtTest()`                             | Standalone debug experiments — not part of the normal flow.                |
 
 ### Types
 
@@ -124,12 +123,10 @@ typedef struct {
 } bt_device_t;
 
 typedef void (*bt_device_callback_t)(bt_device_t device, void *user_data);
-typedef void (*on_start_t)(bt_device_t device, void *user_data);
 typedef void (*on_end_t)(void *user_data);
 
 typedef struct {
     bt_device_callback_t callback;   // called per discovered device
-    on_start_t           on_start;
     on_end_t             on_end;      // called when enumeration completes
 } btwin_params_t;
 

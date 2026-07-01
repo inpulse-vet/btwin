@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <threads.h>
 
 #include "btwin.h"
 
@@ -21,10 +20,7 @@ void my_bt_end(void *user_data) {
 }
 
 int main(int argc, char **argv) {
-    // runBtTest();
-    // return 0;
     printf("hello\n");
-    // runWatcher();
 
     printf("adapter exists: %d\n", btwin_adapter_exists());
     printf("adapter is on:  %d\n", btwin_adapter_is_on());
@@ -41,13 +37,6 @@ int main(int argc, char **argv) {
 
     printf("join\n");
     btwin_join(watcher);
-
-    // struct timespec duration = { .tv_sec = 1, .tv_nsec = 0 };
-    // thrd_sleep(&duration, NULL);
-
-    // printf("sleep\n");
-    // struct timespec duratio2 = { .tv_sec = 120, .tv_nsec = 0 };
-    // thrd_sleep(&duratio2, NULL);
 
     printf("free\n");
     btwin_free(watcher);

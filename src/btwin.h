@@ -23,13 +23,10 @@ typedef struct {
 
 typedef void (*bt_device_callback_t)(bt_device_t device, void *user_data);
 
-typedef void (*on_start_t)(bt_device_t device, void *user_data);
-
 typedef void (*on_end_t)(void *user_data);
 
 typedef struct {
     bt_device_callback_t callback;
-    on_start_t on_start;
     on_end_t on_end;
 } btwin_params_t;
 
@@ -50,10 +47,6 @@ BTWIN_EXPORT int btwin_adapter_exists(void);
 
 // 1 = adapter present and radio On; 0 = present but Off; -1 = no adapter / unknown / error.
 BTWIN_EXPORT int btwin_adapter_is_on(void);
-
-BTWIN_EXPORT int runWatcher();
-
-BTWIN_EXPORT int runBtTest();
 
 #ifdef __cplusplus
 }

@@ -45,6 +45,7 @@ There is no test suite and no linter configured.
 - `btwin_join` blocks on a `std::condition_variable` that is signaled from the WinRT
   `EnumerationCompleted` callback — i.e. it returns once the initial device scan finishes, not on a
   timer.
-- The synchronous helpers `runWatcher()` and `runBtTest()` in `btwin.cpp` are standalone
-  experiments/debugging entry points, not part of the normal `btwin_alloc`/`start`/`join` flow.
+- `btwin_adapter_exists`/`btwin_adapter_is_on` run their WinRT queries on a dedicated worker thread
+  (`run_on_mta_thread` in `btwin.cpp`) that owns its own MTA, so they are safe to call regardless of
+  the caller's apartment.
 - WinRT GUIDs identify the radio standard: Classic = `{e0cbf06c-...f974}`, LE = `{bb7bb05e-...4d49}`.
