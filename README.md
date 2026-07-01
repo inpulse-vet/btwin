@@ -50,7 +50,7 @@ cmake --build build/windows-x64 --config Debug
 cmake --build build/windows-x64 --config Release
 ```
 
-This produces `btwin.dll` (the library) and `BTWin.exe` (the example consumer built from
+This produces `btwin.dll` (the library) and `btwin_demo.exe` (the example consumer built from
 `src/main.c`).
 
 > **Note:** `CMakePresets.json` also defines a `vcpkg` preset that cross-compiles from Linux with
@@ -66,9 +66,9 @@ the watcher through its lifecycle:
 #include <stdio.h>
 #include "btwin.h"
 
-void on_device(bt_device_t device, void *user_data) {
+void on_device(const bt_device_t *device, void *user_data) {
     printf("found %.*s  mac=%s  standard=%d\n",
-           (int)device.name_len, device.name, device.mac, device.standard);
+           (int)device->name_len, device->name, device->mac, device->standard);
 }
 
 void on_end(void *user_data) {
@@ -93,6 +93,43 @@ int main(void) {
 enumeration completes (signaled internally from the WinRT `EnumerationCompleted` callback). See
 `src/main.c` for the example consumer this snippet is adapted from.
 
+## Adapter status
+
+Two standalone functions report on the machine's default Bluetooth adapter. They don't need a
+watcher and run their WinRT queries on a dedicated worker thread, so they're safe to call from any
+thread / apartment:
+
+```c
+btwin_adapter_exists();  // 1 if a default adapter is present, 0 otherwise
+btwin_adapter_is_on();   // 1 = present and radio On, 0 = present but Off, -1 = none/unknown/error
+```
+
+## Logging
+
+By default `btwin` is **silent**, except for critical errors, which are written to `stderr`. To
+route messages into your own logging framework — useful when driving the library from another
+language's bindings — register a process-wide sink:
+
+```c
+void on_log(bt_log_level_t level, const char *message, void *user_data) {
+    // `message` is only valid for the duration of this call; copy it if you retain it.
+    fprintf(stderr, "[btwin/%d] %s\n", level, message);
+}
+
+btwin_set_log_callback(on_log, NULL);   // pass NULL to unregister (reverts to stderr fallback)
+btwin_set_log_level(BT_LOG_INFO);       // default is BT_LOG_INFO
+```
+
+Notes:
+
+- The sink is **global** — it covers both the watcher and the adapter-status functions above.
+- The callback receives the message's **level and raw text** (no timestamp or formatting baked in),
+  so your logger can filter and format as it likes.
+- Messages more verbose than the configured level are dropped. `BT_LOG_OFF` silences everything,
+  including the `stderr` fallback.
+- Set the sink once at init, before starting a watcher. It may be invoked from multiple threads, so
+  the callback must be thread-safe.
+
 ## C ABI reference
 
 All functions are declared in [`src/btwin.h`](src/btwin.h), wrapped in `extern "C"` and marked
@@ -105,6 +142,10 @@ All functions are declared in [`src/btwin.h`](src/btwin.h), wrapped in `extern "
 | `int btwin_stop(btwin_t watcher)`                                | Stop the watcher.                                                          |
 | `void btwin_join(btwin_t watcher)`                               | Block until the initial enumeration completes.                             |
 | `void btwin_free(btwin_t watcher)`                               | Destroy a watcher.                                                         |
+| `int btwin_adapter_exists(void)`                                | `1` if a default Bluetooth adapter is present, `0` otherwise.               |
+| `int btwin_adapter_is_on(void)`                                 | `1` = present and radio On, `0` = present but Off, `-1` = none/unknown/error. |
+| `void btwin_set_log_callback(bt_log_callback_t cb, void *user_data)` | Register the process-wide log sink (`NULL` to unregister).              |
+| `void btwin_set_log_level(bt_log_level_t level)`                | Set the maximum log verbosity (default `BT_LOG_INFO`).                      |
 
 ### Types
 
@@ -116,13 +157,13 @@ typedef enum {
 } bt_standard_t;
 
 typedef struct {
-    uint32_t      name_len;   // length of `name` (not NUL-terminated)
-    char          name[128];
+    uint32_t      name_len;           // length of `name` (not NUL-terminated)
+    char          name[BT_NAME_MAX];  // BT_NAME_MAX == 248, the Bluetooth GAP maximum
     char          mac[18];
     bt_standard_t standard;
 } bt_device_t;
 
-typedef void (*bt_device_callback_t)(bt_device_t device, void *user_data);
+typedef void (*bt_device_callback_t)(const bt_device_t *device, void *user_data);
 typedef void (*on_end_t)(void *user_data);
 
 typedef struct {
@@ -131,6 +172,16 @@ typedef struct {
 } btwin_params_t;
 
 typedef void *btwin_t;               // opaque handle
+
+// Logging
+typedef enum {
+    BT_LOG_OFF = 0,   // nothing is emitted, not even the stderr fallback
+    BT_LOG_ERROR,     // 1
+    BT_LOG_WARN,      // 2
+    BT_LOG_INFO,      // 3
+} bt_log_level_t;
+
+typedef void (*bt_log_callback_t)(bt_log_level_t level, const char *message, void *user_data);
 ```
 
 ## Prebuilt binaries
