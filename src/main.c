@@ -26,6 +26,9 @@ int main(int argc, char **argv) {
     printf("hello\n");
     // runWatcher();
 
+    printf("adapter exists: %d\n", btwin_adapter_exists());
+    printf("adapter is on:  %d\n", btwin_adapter_is_on());
+
     const btwin_params_t params = {
         .callback = my_bt_device_callback,
         .on_end = my_bt_end,

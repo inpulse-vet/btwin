@@ -220,6 +220,46 @@ void btwin_join(btwin_t watcher) {
     w->cond.wait(l);
 }
 
+// Initialize a COM apartment only if the calling thread doesn't already have one.
+// If the thread is already in an apartment (any mode), reuse it rather than forcing
+// multi_threaded, which would throw RPC_E_CHANGED_MODE for an existing STA.
+static void ensure_apartment() {
+    APTTYPE type;
+    APTTYPEQUALIFIER qualifier;
+    if (CoGetApartmentType(&type, &qualifier) == CO_E_NOTINITIALIZED) {
+        winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    }
+}
+
+int btwin_adapter_exists() {
+    try {
+        ensure_apartment();
+        auto adapter = Devices::Bluetooth::BluetoothAdapter::GetDefaultAsync().get();
+        return adapter != nullptr ? 1 : 0;
+    } catch (const winrt::hresult_error &e) {
+        log("btwin_adapter_exists error: {}", winrt::to_string(e.message()));
+        return 0;
+    }
+}
+
+int btwin_adapter_is_on() {
+    try {
+        ensure_apartment();
+        auto adapter = Devices::Bluetooth::BluetoothAdapter::GetDefaultAsync().get();
+        if (adapter == nullptr) {
+            return -1;
+        }
+        auto radio = adapter.GetRadioAsync().get();
+        if (radio == nullptr) {
+            return -1;
+        }
+        return radio.State() == Devices::Radios::RadioState::On ? 1 : 0;
+    } catch (const winrt::hresult_error &e) {
+        log("btwin_adapter_is_on error: {}", winrt::to_string(e.message()));
+        return -1;
+    }
+}
+
 
 int runWatcher() {
     std::mutex lock{};

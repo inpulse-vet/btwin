@@ -45,6 +45,12 @@ BTWIN_EXPORT int btwin_stop(btwin_t watcher);
 
 BTWIN_EXPORT void btwin_join(btwin_t watcher);
 
+// 1 if a default Bluetooth adapter is present, 0 otherwise.
+BTWIN_EXPORT int btwin_adapter_exists(void);
+
+// 1 = adapter present and radio On; 0 = present but Off; -1 = no adapter / unknown / error.
+BTWIN_EXPORT int btwin_adapter_is_on(void);
+
 BTWIN_EXPORT int runWatcher();
 
 BTWIN_EXPORT int runBtTest();
