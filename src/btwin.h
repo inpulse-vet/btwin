@@ -32,6 +32,25 @@ typedef struct {
 
 typedef void *btwin_t;
 
+typedef enum {
+    BT_LOG_OFF = 0,   // nothing is emitted, not even the stderr fallback
+    BT_LOG_ERROR,     // 1
+    BT_LOG_WARN,      // 2
+    BT_LOG_INFO,      // 3
+} bt_log_level_t;
+
+// level = severity of this message; message is only valid for the duration of the
+// call (copy it if you need to retain it). May be invoked from multiple threads.
+typedef void (*bt_log_callback_t)(bt_log_level_t level, const char *message, void *user_data);
+
+// Register the process-wide log sink. Pass callback = NULL to unregister and fall
+// back to stderr for errors. Intended to be called once at init, before starting a
+// watcher; safe to call at any time (guarded internally).
+BTWIN_EXPORT void btwin_set_log_callback(bt_log_callback_t callback, void *user_data);
+
+// Messages with severity above this level are dropped. Default: BT_LOG_INFO.
+BTWIN_EXPORT void btwin_set_log_level(bt_log_level_t level);
+
 BTWIN_EXPORT btwin_t btwin_alloc(const btwin_params_t *params, void* user_data);
 
 BTWIN_EXPORT void btwin_free(btwin_t watcher);

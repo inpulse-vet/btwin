@@ -19,8 +19,22 @@ void my_bt_end(void *user_data) {
     printf("my_bt_end\n");
 }
 
+static const char* bt_log_level_strings[] = {
+    "OFF",
+    "ERROR",
+    "WARN",
+    "INFO",
+};
+
+void my_log(bt_log_level_t level, const char *message, void *user_data) {
+    fprintf(stderr, "[btwin/%s] %s\n", bt_log_level_strings[level], message);
+}
+
 int main(int argc, char **argv) {
     printf("hello\n");
+
+    btwin_set_log_callback(my_log, NULL);
+    btwin_set_log_level(BT_LOG_INFO);
 
     printf("adapter exists: %d\n", btwin_adapter_exists());
     printf("adapter is on:  %d\n", btwin_adapter_is_on());

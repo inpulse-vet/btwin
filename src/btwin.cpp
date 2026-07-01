@@ -65,11 +65,45 @@ bt_standard_t getBtDeviceStandard(
 }
 
 
+static std::mutex        g_log_lock;
+static bt_log_callback_t g_log_cb    = nullptr;
+static void*             g_log_user  = nullptr;
+static bt_log_level_t    g_log_level = BT_LOG_INFO;
+
 template<typename... T>
-void log(fmt::v12::format_string<T...> fmt, T &&... args) {
-    auto now = winrt::clock::now();
-    fmt::print("[{}] ", now);
-    fmt::println(fmt, std::forward<T>(args)...);
+static void bt_log(bt_log_level_t level, fmt::format_string<T...> f, T &&... args) {
+    bt_log_callback_t cb;
+    void*             ud;
+    bt_log_level_t    threshold;
+    {
+        std::lock_guard g(g_log_lock);
+        cb = g_log_cb;
+        ud = g_log_user;
+        threshold = g_log_level;
+    }
+
+    if (threshold == BT_LOG_OFF || level > threshold) {
+        return;
+    }
+
+    auto msg = fmt::format(f, std::forward<T>(args)...);
+    if (cb) {
+        cb(level, msg.c_str(), ud);
+    } else if (level == BT_LOG_ERROR) {
+        // stderr fallback: critical errors must not vanish when no sink is set
+        fmt::print(stderr, "[{}] btwin ERROR: {}\n", winrt::clock::now(), msg);
+    }
+}
+
+void btwin_set_log_callback(bt_log_callback_t cb, void* ud) {
+    std::lock_guard g(g_log_lock);
+    g_log_cb = cb;
+    g_log_user = ud;
+}
+
+void btwin_set_log_level(bt_log_level_t level) {
+    std::lock_guard g(g_log_lock);
+    g_log_level = level;
 }
 
 struct BtWatcher {
@@ -108,6 +142,7 @@ struct BtWatcher {
             auto device_name = winrt::to_string(info.Name());
 
             if (!device_mac.has_value()) {
+                bt_log(BT_LOG_WARN, "skipping device '{}': no MAC address", device_name);
                 return;
             }
 
@@ -119,6 +154,8 @@ struct BtWatcher {
             device.name_len = device_name.length();
             device.standard = standard;
 
+            bt_log(BT_LOG_INFO, "device added: {} {} (standard {})", mac, device_name, static_cast<int>(standard));
+
             if (this->on_device) {
                 this->on_device(device, this->user_data);
             }
@@ -126,6 +163,7 @@ struct BtWatcher {
 
 
         w.EnumerationCompleted([this](const auto &watcher, const auto &info) {
+            bt_log(BT_LOG_INFO, "enumeration completed");
             if (this->on_end) {
                 this->on_end(this->user_data);
             }
@@ -137,11 +175,13 @@ struct BtWatcher {
     }
 
     int start() const {
+        bt_log(BT_LOG_INFO, "watcher starting");
         watcher.Start();
         return 1;
     }
 
     int stop() {
+        bt_log(BT_LOG_INFO, "watcher stopping");
         watcher.Stop();
         return 1;
     }
@@ -187,7 +227,7 @@ static int run_on_mta_thread(F &&query, int on_error) {
         try {
             result = query();
         } catch (const winrt::hresult_error &e) {
-            log("adapter query error: {}", winrt::to_string(e.message()));
+            bt_log(BT_LOG_ERROR, "adapter query error: {}", winrt::to_string(e.message()));
             result = on_error;
         }
         winrt::uninit_apartment();
