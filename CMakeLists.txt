@@ -16,6 +16,8 @@ set(SOURCES
 )
 
 add_library("btwin" SHARED ${LIB_SOURCES})
+# Export symbols when compiling the library; consumers of btwin.h import them.
+target_compile_definitions(btwin PRIVATE BTWIN_BUILD)
 target_link_libraries(btwin
         PRIVATE
         fmt::fmt

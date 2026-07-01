@@ -6,7 +6,24 @@
 extern "C" {
 #endif
 
-#define BTWIN_EXPORT __declspec(dllexport)
+// Cross-compiler symbol visibility.
+//   - Define BTWIN_STATIC when building/consuming btwin as a static library.
+//   - Define BTWIN_BUILD when building the btwin library itself (exports symbols);
+//     leave it undefined when consuming the library (imports symbols).
+// The CMake target defines BTWIN_BUILD automatically.
+#if defined(BTWIN_STATIC)
+#  define BTWIN_EXPORT
+#elif defined(_WIN32) || defined(__CYGWIN__)
+#  ifdef BTWIN_BUILD
+#    define BTWIN_EXPORT __declspec(dllexport)
+#  else
+#    define BTWIN_EXPORT __declspec(dllimport)
+#  endif
+#elif defined(__GNUC__) || defined(__clang__)
+#  define BTWIN_EXPORT __attribute__((visibility("default")))
+#else
+#  define BTWIN_EXPORT
+#endif
 
 typedef enum {
     BT_UNKNOWN,
