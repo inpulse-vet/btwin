@@ -24,8 +24,8 @@ target_link_libraries(btwin
         WindowsApp
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
-target_link_libraries(${PROJECT_NAME}
+add_executable(btwin_demo ${SOURCES})
+target_link_libraries(btwin_demo
         PRIVATE
             "btwin"
 )
