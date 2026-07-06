@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `src/btwin.cpp` — C++/WinRT implementation. Uses `DeviceWatcher` with an AQS filter on the
   Bluetooth Classic and LE `ProtocolId` GUIDs to enumerate devices, and maps each hit into a plain
   `bt_device_t`. Built as a **shared library** named `btwin`.
+  Devices are **streamed as they appear**: the watcher tracks each endpoint by
+  `DeviceInformation.Id()` and reports a device the moment `System.Devices.Aep.IsPresent` becomes
+  `true` (via either the `Added` or `Updated` callback), rather than dumping the cached endpoint
+  list at the end of the scan. See "Conventions / gotchas" for the exact semantics.
 - `src/btwin.h` — the C ABI surface. Everything is wrapped in `extern "C"` and marked
   `__declspec(dllexport)`. `btwin_t` is an opaque handle (really a `BtWatcher*`). This is the
   boundary: callers stay in C, all WinRT lives behind it.
