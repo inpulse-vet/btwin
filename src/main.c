@@ -24,6 +24,7 @@ static const char* bt_log_level_strings[] = {
     "ERROR",
     "WARN",
     "INFO",
+    "DEBUG",
 };
 
 void my_log(bt_log_level_t level, const char *message, void *user_data) {

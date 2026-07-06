@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 #define WINDOWS_LEAN_AND_MEAN
 #include <windows.h>
@@ -64,6 +65,33 @@ bt_standard_t getBtDeviceStandard(
     return standard;
 }
 
+// System.Devices.Aep.IsPresent is a boolean that flips false->true when Windows
+// actually detects the device on-air (as opposed to it merely being a cached
+// association endpoint). Returns nullopt when the key is absent so callers can
+// distinguish "known not present" from "unknown". unbox_value_or keeps a malformed
+// or null box from throwing inside a watcher callback.
+std::optional<bool> getBtDeviceIsPresent(
+    const Foundation::Collections::IMapView<winrt::hstring, Foundation::IInspectable> &properties) {
+    if (properties.HasKey(L"System.Devices.Aep.IsPresent")) {
+        if (const auto value = properties.Lookup(L"System.Devices.Aep.IsPresent")) {
+            return std::optional(winrt::unbox_value_or<bool>(value, false));
+        }
+    }
+    return std::optional<bool>();
+}
+
+// System.ItemNameDisplay can resolve later than the initial Added event, arriving
+// in an Updated payload. Returns nullopt when the key is absent.
+std::optional<std::string> getBtDeviceName(
+    const Foundation::Collections::IMapView<winrt::hstring, Foundation::IInspectable> &properties) {
+    if (properties.HasKey(L"System.ItemNameDisplay")) {
+        if (const auto value = properties.Lookup(L"System.ItemNameDisplay")) {
+            return std::optional(winrt::to_string(winrt::unbox_value_or<winrt::hstring>(value, L"")));
+        }
+    }
+    return std::optional<std::string>();
+}
+
 
 static std::mutex        g_log_lock;
 static bt_log_callback_t g_log_cb    = nullptr;
@@ -117,6 +145,32 @@ struct BtWatcher {
     std::mutex lock{};
     std::condition_variable cond{};
 
+    // Per-endpoint state, keyed by DeviceInformation.Id(). An Updated event carries
+    // only the Id plus the changed property subset, so name/mac/standard captured at
+    // Added time must be stashed here to be correlated with later presence changes.
+    struct TrackedDevice {
+        std::string   mac{};
+        std::string   name{};
+        bt_standard_t standard{BT_UNKNOWN};
+        bool          is_present{false}; // last known System.Devices.Aep.IsPresent
+        bool          reported{false};   // has on_device already fired for this Id?
+    };
+    std::unordered_map<std::string, TrackedDevice> devices{};
+
+    // Build a bt_device_t from a tracked entry and hand it to the user callback.
+    // MUST be called WITHOUT holding `lock` — the callback runs arbitrary user code.
+    void report_device(const TrackedDevice &d) const {
+        bt_device_t device = {};
+        // copy at most sizeof-1 so the zero-initialized final byte stays a NUL terminator
+        d.mac.copy(device.mac, sizeof(device.mac) - 1);
+        device.name_len = static_cast<uint32_t>(d.name.copy(device.name, sizeof(device.name)));
+        device.standard = d.standard;
+        bt_log(BT_LOG_INFO, "reporting device: {} {} (standard {})", d.mac, d.name, static_cast<int>(d.standard));
+        if (on_device) {
+            on_device(&device, user_data);
+        }
+    }
+
     explicit BtWatcher(const btwin_params_t *params, void *user_data): user_data(user_data), watcher(nullptr) {
 
         on_device = params->callback;
@@ -132,31 +186,86 @@ struct BtWatcher {
                 L"System.Devices.Aep.ProtocolId",
                 L"System.Devices.Aep.DeviceAddress",
                 L"System.ItemNameDisplay",
+                L"System.Devices.Aep.IsPresent",
             },
             Devices::Enumeration::DeviceInformationKind::AssociationEndpoint
         );
 
+        // Added reflects Windows' cached association-endpoint list: a device usually
+        // shows up here with IsPresent=false and only becomes present later (Updated).
+        // Record the device unconditionally; report only once it is explicitly present.
         w.Added([this](const auto &watcher, const auto &info) {
+            auto id = winrt::to_string(info.Id());
             auto device_mac = getBtDeviceMacAddress(info.Properties());
             auto standard = getBtDeviceStandard(info.Properties());
             auto device_name = winrt::to_string(info.Name());
+            auto present = getBtDeviceIsPresent(info.Properties());
+
+            bt_log(BT_LOG_INFO, "device added: {} {} (standard {}, present {})",
+                   device_mac.value_or("?"), device_name, static_cast<int>(standard),
+                   present.has_value() ? (present.value() ? "true" : "false") : "unknown");
 
             if (!device_mac.has_value()) {
-                bt_log(BT_LOG_WARN, "skipping device '{}': no MAC address", device_name);
-                return;
+                bt_log(BT_LOG_WARN, "device '{}': no MAC address yet", device_name);
             }
 
-            const auto &mac = device_mac.value();
+            std::optional<TrackedDevice> to_report;
+            {
+                auto g = std::lock_guard(lock);
+                auto &entry = devices[id]; // value-inits reported=false on first insert
+                entry.mac = device_mac.value_or("");
+                entry.name = device_name;
+                entry.standard = standard;
+                entry.is_present = present.value_or(false);
 
-            bt_device_t device = {};
-            mac.copy(device.mac, sizeof(device.mac));
-            device.name_len = static_cast<uint32_t>(device_name.copy(device.name, sizeof(device.name)));
-            device.standard = standard;
+                if (entry.is_present && !entry.reported && !entry.mac.empty()) {
+                    entry.reported = true;
+                    to_report = entry;
+                }
+            }
+            if (to_report) {
+                report_device(*to_report);
+            }
+        });
 
-            bt_log(BT_LOG_INFO, "device added: {} {} (standard {})", mac, device_name, static_cast<int>(standard));
+        // Updated carries only the Id plus the changed property subset. Correlate it
+        // with the Added record and report on the first false->true presence transition.
+        // Note: never call getBtDeviceStandard here — ProtocolId is absent from an
+        // Updated payload and the unguarded unbox would throw.
+        w.Updated([this](const auto &watcher, const Devices::Enumeration::DeviceInformationUpdate &update) {
+            auto id = winrt::to_string(update.Id());
+            auto props = update.Properties();
+            auto present = getBtDeviceIsPresent(props);
+            auto name = getBtDeviceName(props);
+            auto mac = getBtDeviceMacAddress(props);
 
-            if (this->on_device) {
-                this->on_device(&device, this->user_data);
+            std::optional<TrackedDevice> to_report;
+            {
+                auto g = std::lock_guard(lock);
+                auto it = devices.find(id);
+                if (it == devices.end()) {
+                    // Updated before its Added — nothing to correlate against.
+                    return;
+                }
+                auto &entry = it->second;
+
+                if (present.has_value()) {
+                    entry.is_present = present.value();
+                }
+                if (name.has_value()) {
+                    entry.name = name.value();
+                }
+                if (mac.has_value() && entry.mac.empty()) {
+                    entry.mac = mac.value();
+                }
+
+                if (entry.is_present && !entry.reported && !entry.mac.empty()) {
+                    entry.reported = true;
+                    to_report = entry;
+                }
+            }
+            if (to_report) {
+                report_device(*to_report);
             }
         });
 
@@ -173,15 +282,42 @@ struct BtWatcher {
         watcher = std::move(w);
     }
 
+    // Start() is only legal from Created/Stopped/Aborted; calling it while the watcher
+    // is Started/EnumerationCompleted/Stopping throws. Guard on Status() so a repeat
+    // start is a no-op, and swallow any WinRT error so it never crosses the C ABI.
     int start() const {
-        bt_log(BT_LOG_INFO, "watcher starting");
-        watcher.Start();
+        using Status = Devices::Enumeration::DeviceWatcherStatus;
+        const auto status = watcher.Status();
+        if (status == Status::Started || status == Status::EnumerationCompleted || status == Status::Stopping) {
+            bt_log(BT_LOG_DEBUG, "watcher already running (status {}); start is a no-op", static_cast<int>(status));
+            return 1;
+        }
+        bt_log(BT_LOG_DEBUG, "watcher starting");
+        try {
+            watcher.Start();
+        } catch (const winrt::hresult_error &e) {
+            bt_log(BT_LOG_ERROR, "watcher start failed: {}", winrt::to_string(e.message()));
+            return 0;
+        }
         return 1;
     }
 
+    // Stop() is only legal from Started/EnumerationCompleted; in any other state it is
+    // a no-op. Swallow any WinRT error so it never crosses the C ABI.
     int stop() {
-        bt_log(BT_LOG_INFO, "watcher stopping");
-        watcher.Stop();
+        using Status = Devices::Enumeration::DeviceWatcherStatus;
+        const auto status = watcher.Status();
+        if (status != Status::Started && status != Status::EnumerationCompleted) {
+            bt_log(BT_LOG_DEBUG, "watcher not running (status {}); stop is a no-op", static_cast<int>(status));
+            return 1;
+        }
+        bt_log(BT_LOG_DEBUG, "watcher stopping");
+        try {
+            watcher.Stop();
+        } catch (const winrt::hresult_error &e) {
+            bt_log(BT_LOG_ERROR, "watcher stop failed: {}", winrt::to_string(e.message()));
+            return 0;
+        }
         return 1;
     }
 

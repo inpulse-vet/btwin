@@ -179,6 +179,7 @@ typedef enum {
     BT_LOG_ERROR,     // 1
     BT_LOG_WARN,      // 2
     BT_LOG_INFO,      // 3
+    BT_LOG_DEBUG,     // 4 — low-level chatter (e.g. watcher start/stop); off by default
 } bt_log_level_t;
 
 typedef void (*bt_log_callback_t)(bt_log_level_t level, const char *message, void *user_data);
