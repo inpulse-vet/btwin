@@ -46,9 +46,24 @@ There is no test suite and no linter configured.
 
 ## Conventions / gotchas
 
+- **Device streaming / presence:** the watcher requests `System.Devices.Aep.IsPresent` and wires
+  both the `Added` and `Updated` callbacks. `Added` reflects Windows' cached endpoint list (often
+  `IsPresent=false`); the real "device is nearby now" signal is the `false→true` presence
+  transition, which typically arrives via `Updated`. Since `Updated` carries only the changed
+  property subset plus `Id()`, each endpoint's name/mac/standard is stashed in a map keyed by
+  `DeviceInformation.Id()` at `Added` time so an `Updated` can be correlated back. A device is
+  reported through `on_device` **exactly once**, on the first confirmed presence (`reported` latch).
+  A device that never reports `IsPresent=true` is never reported — this is deliberate. Do **not**
+  call `getBtDeviceStandard` on an `Updated` payload: `ProtocolId` is absent there and the unguarded
+  unbox would throw.
 - `btwin_join` blocks on a `std::condition_variable` that is signaled from the WinRT
   `EnumerationCompleted` callback — i.e. it returns once the initial device scan finishes, not on a
-  timer.
+  timer. Presence transitions that occur during the scan are streamed to `on_device` before join
+  returns.
+- `btwin_start`/`btwin_stop` guard on `watcher.Status()` and swallow WinRT errors: a repeated or
+  out-of-order start/stop is a logged no-op, and no exception crosses the C ABI. Their start/stop
+  chatter logs at `BT_LOG_DEBUG` (level 4, below the default `BT_LOG_INFO` threshold, so off by
+  default).
 - `btwin_adapter_exists`/`btwin_adapter_is_on` run their WinRT queries on a dedicated worker thread
   (`run_on_mta_thread` in `btwin.cpp`) that owns its own MTA, so they are safe to call regardless of
   the caller's apartment.
