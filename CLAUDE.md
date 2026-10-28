@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   Bluetooth Classic and LE `ProtocolId` GUIDs to enumerate devices, and maps each hit into a plain
   `bt_device_t`. Built as a **shared library** named `btwin`.
   Devices are **streamed as they appear**: the watcher tracks each endpoint by
-  `DeviceInformation.Id()` and reports a device the moment `System.Devices.Aep.IsPresent` becomes
-  `true` (via either the `Added` or `Updated` callback), rather than dumping the cached endpoint
-  list at the end of the scan. See "Conventions / gotchas" for the exact semantics.
+  `DeviceInformation.Id()` and reports a device as soon as it is known (via the `Added` callback)
+  and again whenever `System.Devices.Aep.IsPresent` changes (via `Updated`), carrying the current
+  value in `bt_device_t.is_present`. See "Conventions / gotchas" for the exact semantics.
 - `src/btwin.h` — the C ABI surface. Everything is wrapped in `extern "C"` and marked
   `__declspec(dllexport)`. `btwin_t` is an opaque handle (really a `BtWatcher*`). This is the
   boundary: callers stay in C, all WinRT lives behind it.
@@ -52,8 +52,10 @@ There is no test suite and no linter configured.
   transition, which typically arrives via `Updated`. Since `Updated` carries only the changed
   property subset plus `Id()`, each endpoint's name/mac/standard is stashed in a map keyed by
   `DeviceInformation.Id()` at `Added` time so an `Updated` can be correlated back. A device is
-  reported through `on_device` **exactly once**, on the first confirmed presence (`reported` latch).
-  A device that never reports `IsPresent=true` is never reported — this is deliberate. Do **not**
+  reported through `on_device` once per presence state, with `bt_device_t.is_present` set: right at
+  `Added` (usually `0`, a cached endpoint) and again on each presence change (`reported_present`
+  tracks the last value sent). Filtering out not-present devices is the **caller's** decision
+  (libcomm's `BTWinScanner` does it). A device without a MAC is held until one arrives. Do **not**
   call `getBtDeviceStandard` on an `Updated` payload: `ProtocolId` is absent there and the unguarded
   unbox would throw.
 - `btwin_join` blocks on a `std::condition_variable` that is signaled from the WinRT

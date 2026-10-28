@@ -67,8 +67,10 @@ the watcher through its lifecycle:
 #include "btwin.h"
 
 void on_device(const bt_device_t *device, void *user_data) {
-    printf("found %.*s  mac=%s  standard=%d\n",
-           (int)device->name_len, device->name, device->mac, device->standard);
+    // A device may be reported first with is_present=0 (a cached endpoint) and again with
+    // is_present=1 once Windows sees it on-air; filter here if you only want the latter.
+    printf("found %.*s  mac=%s  standard=%d  present=%d\n",
+           (int)device->name_len, device->name, device->mac, device->standard, device->is_present);
 }
 
 void on_end(void *user_data) {
@@ -77,7 +79,7 @@ void on_end(void *user_data) {
 
 int main(void) {
     const btwin_params_t params = {
-        .callback = on_device,  // invoked once per discovered device
+        .callback = on_device,  // invoked per discovered device, again when its presence changes
         .on_end   = on_end,     // invoked when the initial enumeration finishes
     };
 
@@ -161,6 +163,7 @@ typedef struct {
     char          name[BT_NAME_MAX];  // BT_NAME_MAX == 248, the Bluetooth GAP maximum
     char          mac[18];
     bt_standard_t standard;
+    int32_t       is_present;         // 1 = System.Devices.Aep.IsPresent true, 0 = false/unknown
 } bt_device_t;
 
 typedef void (*bt_device_callback_t)(const bt_device_t *device, void *user_data);

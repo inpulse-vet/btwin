@@ -153,7 +153,14 @@ struct BtWatcher {
         std::string   name{};
         bt_standard_t standard{BT_UNKNOWN};
         bool          is_present{false}; // last known System.Devices.Aep.IsPresent
-        bool          reported{false};   // has on_device already fired for this Id?
+        // is_present value last handed to on_device; nullopt until the first report.
+        std::optional<bool> reported_present{};
+
+        // Report when the presence differs from what the caller last saw (or it has not
+        // seen this device yet). A device without a MAC is held until one arrives.
+        bool needs_report() const {
+            return !mac.empty() && reported_present != is_present;
+        }
     };
     std::unordered_map<std::string, TrackedDevice> devices{};
 
@@ -165,7 +172,9 @@ struct BtWatcher {
         d.mac.copy(device.mac, sizeof(device.mac) - 1);
         device.name_len = static_cast<uint32_t>(d.name.copy(device.name, sizeof(device.name)));
         device.standard = d.standard;
-        bt_log(BT_LOG_INFO, "reporting device: {} {} (standard {})", d.mac, d.name, static_cast<int>(d.standard));
+        device.is_present = d.is_present ? 1 : 0;
+        bt_log(BT_LOG_INFO, "reporting device: {} {} (standard {}, present {})",
+               d.mac, d.name, static_cast<int>(d.standard), d.is_present);
         if (on_device) {
             on_device(&device, user_data);
         }
@@ -193,7 +202,8 @@ struct BtWatcher {
 
         // Added reflects Windows' cached association-endpoint list: a device usually
         // shows up here with IsPresent=false and only becomes present later (Updated).
-        // Record the device unconditionally; report only once it is explicitly present.
+        // Report it right away with its current presence in bt_device_t.is_present;
+        // whether a not-present device is wanted is the caller's decision.
         w.Added([this](const auto &watcher, const auto &info) {
             auto id = winrt::to_string(info.Id());
             auto device_mac = getBtDeviceMacAddress(info.Properties());
@@ -212,14 +222,14 @@ struct BtWatcher {
             std::optional<TrackedDevice> to_report;
             {
                 auto g = std::lock_guard(lock);
-                auto &entry = devices[id]; // value-inits reported=false on first insert
+                auto &entry = devices[id]; // value-inits reported_present=nullopt on first insert
                 entry.mac = device_mac.value_or("");
                 entry.name = device_name;
                 entry.standard = standard;
                 entry.is_present = present.value_or(false);
 
-                if (entry.is_present && !entry.reported && !entry.mac.empty()) {
-                    entry.reported = true;
+                if (entry.needs_report()) {
+                    entry.reported_present = entry.is_present;
                     to_report = entry;
                 }
             }
@@ -229,7 +239,8 @@ struct BtWatcher {
         });
 
         // Updated carries only the Id plus the changed property subset. Correlate it
-        // with the Added record and report on the first false->true presence transition.
+        // with the Added record and report again whenever the presence changes (most
+        // importantly the false->true transition: the device is on-air now).
         // Note: never call getBtDeviceStandard here — ProtocolId is absent from an
         // Updated payload and the unguarded unbox would throw.
         w.Updated([this](const auto &watcher, const Devices::Enumeration::DeviceInformationUpdate &update) {
@@ -259,8 +270,8 @@ struct BtWatcher {
                     entry.mac = mac.value();
                 }
 
-                if (entry.is_present && !entry.reported && !entry.mac.empty()) {
-                    entry.reported = true;
+                if (entry.needs_report()) {
+                    entry.reported_present = entry.is_present;
                     to_report = entry;
                 }
             }

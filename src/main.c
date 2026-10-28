@@ -11,7 +11,7 @@ static const char* bt_standard_strings[] = {
 void my_bt_device_callback(const bt_device_t *device, void *user_data) {
     const int len = (int)device->name_len;
     if (device->standard == BT_CLASSIC) {
-        printf("found: %s %s %.*s\n", bt_standard_strings[device->standard], device->mac, len, device->name);
+        printf("found: %s %s %.*s (present %d)\n", bt_standard_strings[device->standard], device->mac, len, device->name, device->is_present);
     }
 }
 

@@ -38,6 +38,7 @@ typedef struct {
     char name[BT_NAME_MAX];
     char mac[18];
     bt_standard_t standard;
+    int32_t is_present;   // 1 = System.Devices.Aep.IsPresent true, 0 = false/unknown
 } bt_device_t;
 
 typedef void (*bt_device_callback_t)(const bt_device_t *device, void *user_data);
